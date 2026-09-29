@@ -72,6 +72,14 @@ pub enum Hata {
     SifrelemeHatasi,
     /// Nonce kaynağı tükendi veya daha önce kullanılmış bir nonce istendi.
     NonceTekrari,
+    /// Alıcı tarafta sıra sayacı taştı.
+    ///
+    /// Gönderen taraf `NonceSayaci::sonraki_nonce` ile `u64::MAX`'te sarmalamayı
+    /// reddeder; alıcı taraf da aynı sözleşmeyi uygular. Taşma sessizce
+    /// sarmalanırsa sayaç `0`'a döner ve **tüm eski paketler yeniden kabul
+    /// edilir**, yani oynatma penceresi sıfırlanır. Bu yüzden taşma hata
+    /// olarak bildirilir, taşınmaz.
+    SiraTasmasi,
     /// Parola modunda şifrelenmemiş aktarım yapılamaz.
     SifrelemeZorunlu,
     /// Oturum açmak için grup parolası zorunludur.
@@ -142,6 +150,10 @@ impl fmt::Display for Hata {
             Hata::OturumAnahtariYok => write!(f, "oturum anahtarı yok"),
             Hata::SifrelemeHatasi => write!(f, "şifreleme/çözme doğrulaması başarısız"),
             Hata::NonceTekrari => write!(f, "nonce tekrarı veya nonce kaynağı tükendi"),
+            Hata::SiraTasmasi => write!(
+                f,
+                "sıra sayacı taştı: bağlantı kapatılmalı (oynatma penceresi sıfırlanamaz)"
+            ),
             Hata::SifrelemeZorunlu => write!(
                 f,
                 "parola modunda şifrelenmemiş aktarım yapılamaz: taşıma şifrelemesi zorunludur"

@@ -2,7 +2,10 @@
 name = "peersync"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+# Gerçekten doğrulanmış alt sınır: tüm derleme, test ve kalite kapısı
+# koşumları 1.98.1 ile yapıldı. Daha eski bir sürüm ilan etmek ölçülmemiş bir
+# taahhüt olurdu. Ayrıntı: README "Kurulum" bölümü.
+rust-version = "1.98"
 license = "MIT"
 description = "Sunucusuz P2P dosya senkronizasyonu: UDP yayın eş keşfi, içerik tanımlayıcılı parçalama ve şifreli delta aktarımı."
 repository = "https://github.com/SyntaxOrigin/peersync"

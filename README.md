@@ -32,8 +32,17 @@ kuralı devreye girer ve kaybeden tarafın sürümü asla silinmez.
 
 ## Kurulum
 
-Gereksinim: Rust 1.85+ (geliştirme ortamında 1.98.1 ile doğrulandı) ve Windows'ta
+Gereksinim: **Rust 1.98+** (aşağıdaki MSRV notuna bakınız) ve Windows'ta
 `link.exe` için MinGW-w64 (POSIX/UCRT paketi).
+
+> **MSRV beyanı doğrulanmamıştır.** `Cargo.toml` içindeki `rust-version = "1.98"`
+> **geliştirme ve doğrulama** için kullanılan toolchain'i yansıtır: `cargo build
+> --release`, `cargo test` ve kalite kapısı koşumlarının tamamı `rustc 1.98.1`
+> üzerinde yapılmıştır. Kodun 1.98'den **daha eski** bir toolchain'de derlenip
+> derlenmediği **test edilmemiştir** ve bu depoda iddia edilmemektedir. Daha eski
+> bir toolchain'de derleme gerekirse `rust-version` değerini düşürüp
+> `cargo +<sürüm> build --release && cargo +<sürüm> test` ile **kendi
+> ortamınızda** doğrulayın.
 
 ```powershell
 # MinGW araç zincirini PATH'e ekleyin (yoksa)
@@ -111,7 +120,7 @@ listesinde görünür ve tercih edilmemelidir.
 ## Test
 
 ```powershell
-cargo test                      # 198 test (191 birim + 7 uçtan uca)
+cargo test                      # 202 test (195 birim + 7 uçtan uca)
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo build --release
@@ -120,8 +129,8 @@ cargo build --release
 Son doğrulanan sonuç:
 
 ```
-running 191 tests
-test result: ok. 191 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+running 195 tests
+test result: ok. 195 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 running 7 tests
 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
@@ -220,6 +229,18 @@ Derleme sabitleri:
   metindir. Ağ üzerinden gizlilik için VPN önerilir.
 - **Parola gücüne bağlı.** Argon2id parametreleri makul bir denge; parola
   sözlüğü saldırısına karşı garanti verilmez.
+- **Sıra sayacının üst sınırı `u64`, oturum yenilemesi zorunlu.** Gönderen taraf
+  `NonceSayaci::sonraki_nonce` ile `u64::MAX`'te sarmalamayı **reddeder** ve
+  alıcı taraf aynı sözleşmeyi uygular: sayaç taşarsa `Hata::SiraTasmasi` döner,
+  bağlantı kapatılmalıdır. Taşma pratikte `2^64` pakete yaklaşmayı gerektirir;
+  bu yüzden koruma bir **sözleşme tutarlılığı** garantisidir, bir olasılık
+  azaltması değil. Doğrulama penceresi (replay window) `beklenen` sayacıdır ve
+  sarmalama bir kez olsa **tüm eski paketler yeniden kabul edilir**; bu yüzden
+  sarmalama yerine hata dönmesi bilinçli bir seçimdir
+  (`sifre::tests::tasma_deneden_sonra_eski_paket_hala_oynatma_reddedilir`).
+- **MSRV beyanı ölçülmüş değildir.** Bkz. [Kurulum](#kurulum) bölümündeki not:
+  `rust-version = "1.98"` yalnızca doğrulamanın yapıldığı toolchain'i yansıtır,
+  daha eski sürümler test edilmemiştir.
 
 ## Gelecek Geliştirmeler
 

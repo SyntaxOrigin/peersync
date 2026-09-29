@@ -250,6 +250,14 @@ impl SifreliKanal {
     ///   [`Hata::BaglantiKapandi`].
     /// - Poly1305 etiketi tutmazsa ya da yön etiketi çelişirse
     ///   [`Hata::SifrelemeHatasi`].
+    /// - Sayaç `u64::MAX`'e ulaşırsa [`Hata::SiraTasmasi`].
+    ///
+    /// Sıra numarası nonce içinde taşınır ve nonce AEAD etiketiyle örtülü
+    /// olduğundan **uzaktan değiştirilemez**; taşma ancak tam olarak
+    /// `u64::MAX` paket işlendiğinde mümkündür. Yine de gönderen taraf
+    /// `u64::MAX`'te sarmalamayı reddettiği için alıcı da aynı sözleşmeyi
+    /// uygular: taşma sarmalanmaz, hata döner. Sarmalanma olsaydı sayaç `0`'a
+    /// döner ve oynatma penceresi **tümüyle sıfırlanırdı**.
     pub fn coz(&mut self, paket: &[u8]) -> Sonuc<Vec<u8>> {
         if paket.len() < BASLIK_UZUNLUGU + 16 {
             return Err(Hata::BozukPaket(format!(
@@ -281,6 +289,13 @@ impl SifreliKanal {
             .map_err(|_| Hata::SifrelemeHatasi)?;
         if sira > self.beklenen {
             self.beklenen = sira;
+        }
+        // `saturating_add` yerine **açık hata**: sarmalama `beklenen`'i 0'a
+        // düşürür ve oynatma penceresi sıfırlanır. Gönderen taraf da
+        // `sonraki_nonce` ile sarmalamayı reddediyor; iki tarafın sözleşmesi
+        // aynı olmalıdır.
+        if self.beklenen == u64::MAX {
+            return Err(Hata::SiraTasmasi);
         }
         self.beklenen += 1;
         Ok(duz)
@@ -578,6 +593,127 @@ mod tests {
         let ucuncu = gonderen.sifrele(b"ucuncu").unwrap();
         alan.coz(&ilk).unwrap();
         assert_eq!(alan.coz(&ucuncu).unwrap(), b"ucuncu".to_vec());
+    }
+
+    // -----------------------------------------------------------------------
+    // Sıra sayacı taşması
+    // -----------------------------------------------------------------------
+
+    /// Alıcı kanalın sıra beklentisini doğrudan ayarlar.
+    ///
+    /// `beklenen` özel alandır ve 2^64 paket göndermeden `u64::MAX`'a
+    /// ulaştırılamaz; testler modül içinde olduğu için buradan ayarlanabilir.
+    fn alan_beklenen(anahtar: [u8; ANAHTAR_UZUNLUGU], beklenen: u64) -> SifreliKanal {
+        SifreliKanal {
+            anahtar: Anahtar::yeni(anahtar),
+            yon: Yon::IstemciEs,
+            sayac: NonceSayaci::yeni(Yon::IstemciEs, 0),
+            beklenen,
+        }
+    }
+
+    /// İstenen sıra numarasıyla geçerli bir paket üretir.
+    ///
+    /// `sifrele` yalnızca `sonraki_nonce` sırasını izleyebildiği için
+    /// `u64::MAX` gibi uç değerleri üretemez; sözleşmeyi doğrulayan testler
+    /// paketi elle kurmak zorundadır. Düzen `sifrele` ile birebir aynıdır.
+    fn paket_uret(kanal: &SifreliKanal, sira: u64, duz: &[u8]) -> Vec<u8> {
+        let mut nonce_dizi = [0u8; NONCE_UZUNLUGU];
+        nonce_dizi[..4].copy_from_slice(&kanal.yon.etiket());
+        nonce_dizi[4..].copy_from_slice(&sira.to_le_bytes());
+        let sifreli = kanal
+            .simge()
+            .encrypt(
+                ChaChaNonce::from_slice(&nonce_dizi),
+                Payload {
+                    msg: duz,
+                    aad: &kanal.yon.etiket(),
+                },
+            )
+            .expect("test paketi sifrelenemedi");
+        let mut paket = Vec::with_capacity(BASLIK_UZUNLUGU + sifreli.len());
+        paket.extend_from_slice(&nonce_dizi);
+        paket.extend_from_slice(&sira.to_le_bytes());
+        paket.extend_from_slice(&sifreli);
+        paket
+    }
+
+    #[test]
+    fn sira_uy64_max_ta_hata_doner_ve_oynatma_penceresi_sifirlanmaz() {
+        // `beklenen` zaten u64::MAX'a dayandiginda, sira = u64::MAX paketi
+        // sayaci 1 arttirarak **tasir**. Sarmalama release derlemesinde 0'a
+        // doner ve tum eski paketler yeniden kabul edilir.
+        let mut alan = alan_beklenen([9u8; ANAHTAR_UZUNLUGU], u64::MAX);
+        assert_eq!(alan.gorulen_en_buyuk_sira(), u64::MAX - 1);
+
+        let paket = paket_uret(&alan, u64::MAX, b"tasma");
+        let hata = alan.coz(&paket).unwrap_err();
+        assert!(
+            matches!(hata, Hata::SiraTasmasi),
+            "u64::MAX paketinde hata donmeliydi, alinan: {hata:?}"
+        );
+        assert_eq!(
+            alan.gorulen_en_buyuk_sira(),
+            u64::MAX - 1,
+            "hata sonrasi oynatma penceresi **aynen korunmali** (0'a donmemeli)"
+        );
+    }
+
+    #[test]
+    fn tasma_deneden_sonra_eski_paket_hala_oynatma_reddedilir() {
+        // Asil zarar siranin sifirlanmasiydi: tasmadan sonra daha once
+        // gorulmus ama yuksek bir sira tekrar kabul edilirdi. Yeni kodda
+        // beklenen u64::MAX'da kalir, dolayisiyla oynatma reddi surer.
+        let mut alan = alan_beklenen([11u8; ANAHTAR_UZUNLUGU], 1_000);
+        // 1) Once sayaci tasi.
+        let tasan = paket_uret(&alan, u64::MAX, b"tasma");
+        assert!(matches!(alan.coz(&tasan).unwrap_err(), Hata::SiraTasmasi));
+
+        // 2) Daha once gorulmus bir sirayi tekrar gonder.
+        let eski = paket_uret(&alan, 500, b"eski paket");
+        let hata = alan.coz(&eski).unwrap_err();
+        assert!(
+            matches!(hata, Hata::BaglantiKapandi { .. }),
+            "tasma sonrasi eski paket oynatma olarak reddedilmeliydi, alinan: {hata:?}"
+        );
+    }
+
+    #[test]
+    fn gonderen_ve_alici_tarafin_tasma_sozlesmesi_ayni() {
+        // Gonderen u64::MAX'te sarmalamayi reddeder; dolayisiyla uretebilecegi
+        // en buyuk sira u64::MAX - 1'dir ve alici onu kabul edebilmelidir.
+        let o = ozut("tasma-sozlesme");
+        let istemci = Oturum::istemci(&o).unwrap();
+        let anahtar = *istemci.gonderen.baytlar();
+        let mut sayac = NonceSayaci::yeni(Yon::IstemciEs, u64::MAX - 1);
+        let nonce = sayac.sonraki_nonce().unwrap();
+        assert_eq!(nonce.sira(), u64::MAX - 1);
+        // Bir sonraki gonderim reddedilir.
+        assert!(matches!(
+            sayac.sonraki_nonce().unwrap_err(),
+            Hata::NonceTekrari
+        ));
+
+        let mut alan = alan_beklenen(anahtar, 0);
+        let son = paket_uret(&alan, u64::MAX - 1, b"son gonderilebilir");
+        assert_eq!(alan.coz(&son).unwrap(), b"son gonderilebilir".to_vec());
+        assert_eq!(alan.gorulen_en_buyuk_sira(), u64::MAX - 1);
+        // Alıcı, gönderenin asla üretemeyeceği sırayı da kabul etmez.
+        let tasacak = paket_uret(&alan, u64::MAX, b"gonderilemez");
+        assert!(matches!(alan.coz(&tasacak).unwrap_err(), Hata::SiraTasmasi));
+    }
+
+    #[test]
+    fn tam_giden_sayaci_tasma_yapmaz() {
+        // Butun yolun bittigi durum temizdir: son kabul edilebilir sira
+        // gonderilir, sonraki gonderim reddedilir ve alici tasmaz.
+        let o = ozut("tam-son");
+        let istemci = Oturum::istemci(&o).unwrap();
+        let anahtar = *istemci.gonderen.baytlar();
+        let mut alan = alan_beklenen(anahtar, u64::MAX - 1);
+        let son = paket_uret(&alan, u64::MAX - 1, b"son");
+        assert_eq!(alan.coz(&son).unwrap(), b"son".to_vec());
+        assert_eq!(alan.gorulen_en_buyuk_sira(), u64::MAX - 1);
     }
 
     #[test]

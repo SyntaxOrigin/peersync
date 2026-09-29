@@ -84,7 +84,11 @@ impl Karma {
             )));
         }
         let mut dizi = [0u8; KARMA_UZUNLUGU];
-        for (sira, pencere) in baytlar.chunks_exact(2).enumerate() {
+        // Sabit 2 baytlık pencere: `as_chunks` derleyiciye boyutu bildirir,
+        // böylece her yinelemede bölme yapılmaz (clippy::chunks_exact_to_as_chunks).
+        // Artık bayt kalmadığı için tam sayıda pencere olduğu yukarıda doğrulandı.
+        let (pencereler, _) = baytlar.as_chunks::<2>();
+        for (sira, pencere) in pencereler.iter().enumerate() {
             let yuksek = nibbel_deger(pencere[0])?;
             let alcak = nibbel_deger(pencere[1])?;
             dizi[sira] = (yuksek << 4) | alcak;
