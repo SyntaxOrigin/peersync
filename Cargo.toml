@@ -1,0 +1,38 @@
+[package]
+name = "peersync"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Sunucusuz P2P dosya senkronizasyonu: UDP yayın eş keşfi, içerik tanımlayıcılı parçalama ve şifreli delta aktarımı."
+repository = "https://github.com/SyntaxOrigin/peersync"
+readme = "README.md"
+keywords = ["p2p", "sync", "chunking", "encryption"]
+categories = ["command-line-utilities", "network-programming"]
+
+[dependencies]
+# sha2: src/karma.rs ve src/parca.rs içerik tanımlayıcısını (SHA-256) üretir; FIPS 180-4 vektörleriyle doğrulanır.
+sha2 = "0.10"
+# chacha20poly1305: src/sifre.rs el sıkışmadan sonraki tüm taşımayı akış şifreler ve bütünlük doğrular (RFC 8439).
+chacha20poly1305 = "0.10"
+# hkdf: src/sifre.rs parola özütünden her yön için ayrı oturum anahtarı türetir (HKDF-SHA256, RFC 5869).
+hkdf = "0.12"
+# getrandom: src/kimlik.rs cihaz kimliği ve el sıkışma nonce'ları için işletim sistemi entropisi sağlar.
+getrandom = "0.2"
+# zeroize: src/sifre.rs ve src/kimlik.rs anahtar/parola tamponlarını düşürmeden önce bellekte sıfırlar.
+zeroize = { version = "1", features = ["derive"] }
+# argon2: src/kimlik.rs grup parolasından oturum özütü ve yayın etiketi türetir (RFC 9106 Argon2id).
+argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+# serde: src/protok.rs, src/depo.rs ve src/gunluk.rs veri yapılarının türetilmesi için gerekli.
+serde = { version = "1", features = ["derive"] }
+# serde_json: indeks.json ve gecmis.jsonl kalıcı biçimleri ile durum makinesi günlüğü için.
+serde_json = "1"
+# clap: src/main.rs serve/join/sync/status/pair alt komutlarının argüman ayrıştırması için.
+clap = { version = "4", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
