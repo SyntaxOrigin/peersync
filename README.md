@@ -282,6 +282,18 @@ PeerSync örneğini aynı makinede çalıştırıyorsanız ikisine farklı port 
 Yedekler `*.conflict` uzantısıyla durur ve normal taramaya girmez. Yedeklemeden
 emin olduktan sonra elle silebilirsiniz.
 
+## Üretim Atfı
+
+Bu depo **OpenCode** ajanı tarafından, **`space-bunny-free`** modeli
+(`opencode/space-bunny-free`) kullanılarak üretilmiştir.
+
+- **Arac:** OpenCode
+- **Model:** `opencode/space-bunny-free` (Space Bunny Free)
+- **Tür:** Rust, `cargo build` / `cargo test` ile üretilmiş ve doğrulanmıştır.
+
+Kaynak kod, testler ve dokümantasyon bu model tarafından yazılmıştır. İnsan
+katkısı: gereksinim tanımı, kabul ölçütleri ve son kontroller.
+
 ## Lisans
 
 MIT. Ayrıntı için `LICENSE.txt`.
